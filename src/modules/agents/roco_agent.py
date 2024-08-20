@@ -33,9 +33,7 @@ class ROCOAgent(nn.Module):
         self.fc1 = nn.Linear(input_shape, args.rnn_hidden_dim)
         self.rnn = nn.GRUCell(args.rnn_hidden_dim, args.rnn_hidden_dim)
         self.fc2 = nn.Linear(args.rnn_hidden_dim, args.n_actions)
-        
 
-        # 原始的消息网络，输出没有过滤处理的消息
         self.msg_net = nn.Sequential(
             nn.Linear(args.rnn_hidden_dim + args.latent_dim, NN_HIDDEN_SIZE),
             activation_func,
@@ -49,7 +47,6 @@ class ROCOAgent(nn.Module):
         return self.fc1.weight.new(1, self.args.rnn_hidden_dim).zero_()
     
     def forward(self, inputs, hidden_state, bs, test_mode=False, **kwargs):
-        # 注意力机制引入
         x = F.relu(self.fc1(inputs))
         h_in = hidden_state.reshape(-1, self.args.rnn_hidden_dim)
         h = self.rnn(x, h_in)
@@ -100,7 +97,6 @@ class ROCOAgent(nn.Module):
         return return_q, h, returns
 
     def calculate_action_mi_loss(self, h, bs, latent_embed, q):
-        #输入其他相同角色的智能体信息以及自己的编码
         latent_embed = latent_embed.view(bs * self.n_agents, 2, self.n_agents, self.latent_dim)
         g1 = D.Normal(latent_embed[:, 0, :, :].reshape(-1, self.latent_dim), latent_embed[:, 1, :, :].reshape(-1, self.latent_dim) ** (1/2))
         hi = h.view(bs, self.n_agents, 1, -1).repeat(1, 1, self.n_agents, 1).view(bs * self.n_agents * self.n_agents, -1)
