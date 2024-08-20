@@ -195,22 +195,17 @@ class ROCOMAC:
 
 
     def update_role_action_spaces(self):
-        # 生成动作的潜在表示
         action_repr = self.action_encoder()
         action_repr_array = action_repr.detach().cpu().numpy()  # [n_actions, action_latent_d]
 
-        # 使用DBSCAN进行聚类
-        dbscan = DBSCAN(eps=0.5, min_samples=3)  # 你可以根据需求调整eps和min_samples参数
+        dbscan = DBSCAN(eps=0.5, min_samples=3)
         labels = dbscan.fit_predict(action_repr_array)
 
-        # 创建行为空间
         spaces = []
         unique_labels = set(labels)
-
         for label in unique_labels:
-            if label != -1:  # 忽略噪声点
+            if label != -1:  
                 spaces.append((labels == label).astype(np.float))
-
         o_spaces = copy.deepcopy(spaces)
         spaces = []
 
@@ -227,8 +222,6 @@ class ROCOMAC:
 
         for space in spaces:
             space[0] = 1.
-
-        # 确保行为空间的数量至少为3
         while len(spaces) < 3:
             spaces.append(spaces[0])
             spaces.append(spaces[1])
