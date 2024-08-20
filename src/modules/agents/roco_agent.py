@@ -22,9 +22,7 @@ class ROCOAgent(nn.Module):
             nn.BatchNorm1d(NN_HIDDEN_SIZE),
             activation_func,
             nn.Linear(NN_HIDDEN_SIZE, args.n_agents * args.latent_dim * 2)
-        )
-
-        # 预测其他agent的动作网络     
+        )   
         self.inference_net = nn.Sequential(
             nn.Linear(args.rnn_hidden_dim + args.n_actions, NN_HIDDEN_SIZE),
             nn.BatchNorm1d(NN_HIDDEN_SIZE),
@@ -112,16 +110,14 @@ class ROCOAgent(nn.Module):
         one_hot_a = one_hot_a.view(bs, 1, self.n_agents, -1).repeat(1, self.n_agents, 1, 1)
         one_hot_a = one_hot_a.view(bs * self.n_agents * self.n_agents, -1)
 
-        # 推断其他智能体的信息
         latent_infer = self.inference_net(th.cat([hi, one_hot_a], dim=-1)).view(bs * self.n_agents * self.n_agents, -1)
         latent_infer[:, self.latent_dim:] = th.clamp(th.exp(latent_infer[:, self.latent_dim:]), min=self.args.var_floor)
         g2 = D.Normal(latent_infer[:, :self.latent_dim], latent_infer[:, self.latent_dim:] ** (1/2))
 
-        # 计算互信息熵部分：
         mi_loss = kl_divergence(g1, g2).sum(-1).mean()
         return mi_loss * self.args.mi_loss_weight
 
     def calculate_entropy_loss(self, alpha):
-        alpha = th.clamp(alpha, min=1e-4)  #设置阈值，切掉无关通信链路
+        alpha = th.clamp(alpha, min=1e-4)  
         entropy_loss = - (alpha * th.log2(alpha)).sum(-1).mean()
         return entropy_loss * self.args.entropy_loss_weight
