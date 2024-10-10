@@ -52,8 +52,6 @@ class ROCOLearner:
         self.device = self.args.device
 
         self.role_action_spaces_updated = True
-
-        # 动作编码器相关参数及优化器
         self.action_encoder_params = list(self.mac.action_encoder_params())
         self.action_encoder_optimiser = RMSprop(params=self.action_encoder_params, lr=args.lr,
                                                 alpha=args.optim_alpha, eps=args.optim_eps)
@@ -168,31 +166,33 @@ class ROCOLearner:
             role_states = th.cat([role_states[:, 1:], role_states[:, 0:1]], dim=1)
             target_role_max_qvals = self.target_role_mixer(target_role_max_qvals, role_states)
 
+        lambda_reg = 0.001  # You can adjust this value as needed
+
         # Calculate 1-step Q-Learning targets
         targets = rewards + self.args.gamma * (1 - terminated) * target_max_qvals
 
+        # Role-based reward shaping (same as your code)
         rewards_shape = list(rewards.shape)
         rewards_shape[1] = role_t
         role_rewards = th.zeros(rewards_shape).to(self.device)
         role_rewards[:, :rewards.shape[1]] = rewards.detach().clone()
-        role_rewards = role_rewards.view(batch.batch_size, role_at,
-                                         self.role_interval).sum(dim=-1, keepdim=True)
-        # role_terminated
+        role_rewards = role_rewards.view(batch.batch_size, role_at, self.role_interval).sum(dim=-1, keepdim=True)
+
         terminated_shape_o = terminated.shape
         terminated_shape = list(terminated_shape_o)
         terminated_shape[1] = role_t
         role_terminated = th.zeros(terminated_shape).to(self.device)
         role_terminated[:, :terminated_shape_o[1]] = terminated.detach().clone()
         role_terminated = role_terminated.view(batch.batch_size, role_at, self.role_interval).sum(dim=-1, keepdim=True)
-        # role_terminated
+
         role_targets = role_rewards + self.args.gamma * (1 - role_terminated) * target_role_max_qvals
 
-        # Td-error
+        # TD-error calculation (same as your code)
         td_error = (chosen_action_qvals - targets.detach())
         role_td_error = (chosen_role_qvals - role_targets.detach())
 
         mask = mask.expand_as(td_error)
-        
+
         mask_shape = list(mask.shape)
         mask_shape[1] = role_t
         role_mask = th.zeros(mask_shape).to(self.device)
@@ -207,9 +207,29 @@ class ROCOLearner:
         loss = (masked_td_error ** 2).sum() / mask.sum()
         role_loss = (masked_role_td_error ** 2).sum() / role_mask.sum()
 
-        external_loss, loss_dict = self._process_loss(losses, batch)
+        # Regularization term for role-specific parameters (assuming theta_rho are parameters in chosen_role_qvals)
+        # 正则化
+        reg_term = 0.0
+        for param in self.role_mixer.parameters():  # Adjust this to match your role-based Q network
+            reg_term += (param ** 2).sum()
 
-        loss = loss + 0.01 * role_loss + 0.99 * external_loss
+        mi_update_interval = 100  
+        update_step = 0  
+
+        if update_step % mi_update_interval == 0:
+            external_loss, loss_dict = self._process_loss(losses, batch)
+        else:
+            external_loss = self.prev_external_loss  # 假设有一个变量存储上次计算的 external_loss
+
+        update_step += 1
+
+        loss = loss + 0.01 * role_loss + 0.99 * external_loss + lambda_reg * reg_term
+
+        self.prev_external_loss = external_loss
+
+        # # Final loss with regularization
+        # external_loss, loss_dict = self._process_loss(losses, batch)
+        # loss = loss + 0.01 * role_loss + 0.99 * external_loss + lambda_reg * reg_term
 
         # Optimise
         self.optimiser.zero_grad()
@@ -277,8 +297,6 @@ class ROCOLearner:
 
             self.log_stats_t = t_env
 
-
-    # loss元组处理为字典，便于修改item
     def _process_loss(self, losses: list, batch: EpisodeBatch):
         total_loss = 0
         loss_dict = {}
