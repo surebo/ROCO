@@ -4,7 +4,7 @@
 - The results in SMAC (https://arxiv.org/abs/1902.04043) use SC2.4.6.2.69232 not SC2.4.10. 
 ```
 
-# ROCO：Enhancing Multi-Agent Reinforcement Learning through Role-Based Communication Learning
+# ROCO: Role-Oriented Communication for Efficient Multi-Agent Reinforcement Learning
 
 ## Installation instructions
 
